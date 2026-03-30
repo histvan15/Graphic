@@ -11,6 +11,8 @@
 .idea/
 *.swp
 *.swo
+CMakePresets.json
+CMakeUserPresets.json
 
 # OS
 .DS_Store
