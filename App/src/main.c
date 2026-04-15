@@ -1,25 +1,77 @@
 #define SDL_MAIN_HANDLED
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
-#include <iostream>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
+#include <stdio.h>
+#include <math.h>
+#include <stdbool.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+
+typedef struct { float x, y, z; } vec3;
+
+vec3 vec3_add(vec3 a, vec3 b) { return (vec3){a.x + b.x, a.y + b.y, a.z + b.z}; }
+vec3 vec3_sub(vec3 a, vec3 b) { return (vec3){a.x - b.x, a.y - b.y, a.z - b.z}; }
+vec3 vec3_scale(vec3 v, float s) { return (vec3){v.x * s, v.y * s, v.z * s}; }
+vec3 vec3_cross(vec3 a, vec3 b) { 
+    return (vec3){a.y*b.z - a.z*b.y,  a.z*b.x - a.x*b.z,  a.x*b.y - a.y*b.x}; 
+}
+float vec3_dot(vec3 a, vec3 b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
+vec3 vec3_normalize(vec3 v) { 
+    float len = sqrt(vec3_dot(v, v)); 
+    return len == 0 ? v : vec3_scale(v, 1.0f/len); 
+}
+float radians(float deg) { return deg * (M_PI / 180.0f); }
+
+void mat4_identity(float m[16]) {
+    for(int i=0; i<16; i++) m[i] = 0.0f;
+    m[0] = m[5] = m[10] = m[15] = 1.0f;
+}
+
+void mat4_perspective(float fovy, float aspect, float near_z, float far_z, float m[16]) {
+    for(int i=0; i<16; i++) m[i] = 0.0f;
+    float tanHalfFovy = tan(fovy / 2.0f);
+    m[0] = 1.0f / (aspect * tanHalfFovy);
+    m[5] = 1.0f / tanHalfFovy;
+    m[10] = -(far_z + near_z) / (far_z - near_z);
+    m[11] = -1.0f;
+    m[14] = -(2.0f * far_z * near_z) / (far_z - near_z);
+}
+
+void mat4_lookAt(vec3 eye, vec3 center, vec3 up, float m[16]) {
+    vec3 f = vec3_normalize(vec3_sub(center, eye));
+    vec3 s = vec3_normalize(vec3_cross(f, up));
+    vec3 u = vec3_cross(s, f);
+    mat4_identity(m);
+    m[0] = s.x;  m[4] = s.y;  m[8]  = s.z;
+    m[1] = u.x;  m[5] = u.y;  m[9]  = u.z;
+    m[2] = -f.x; m[6] = -f.y; m[10] = -f.z;
+    m[12] = -vec3_dot(s, eye);
+    m[13] = -vec3_dot(u, eye);
+    m[14] =  vec3_dot(f, eye);
+}
+
+void mat4_rotateY(float m[16], float angle) {
+    mat4_identity(m);
+    float c = cos(angle);
+    float s = sin(angle);
+    m[0] = c;  m[8] = s;
+    m[2] = -s; m[10] = c;
+}
 
 const char* vertexShaderSource = "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
     "layout (location = 1) in vec2 aTexCoord;\n" 
     "layout (location = 2) in vec3 aNormal;\n"
-    
     "out vec2 TexCoord;\n" 
     "out vec3 Normal;\n" 
-    "out vec3 FragPos;\n"
+    "out vec3 FragPos;\n" 
     "out float Visibility;\n" 
-    
     "uniform mat4 model;\n"
     "uniform mat4 view;\n"
     "uniform mat4 projection;\n"
@@ -27,13 +79,10 @@ const char* vertexShaderSource = "#version 330 core\n"
     "{\n"
     "   vec4 worldPos = model * vec4(aPos, 1.0);\n"
     "   FragPos = vec3(worldPos);\n"
-    // számolás normálvektor forgatását
     "   Normal = mat3(transpose(inverse(model))) * aNormal;\n"
-    
     "   vec4 posRelativeToCam = view * worldPos;\n"
     "   gl_Position = projection * posRelativeToCam;\n"
     "   TexCoord = aTexCoord;\n"
-    // köd számítás
     "   float distance = length(posRelativeToCam.xyz);\n"
     "   Visibility = exp(-pow((distance * 0.02), 2.0));\n" 
     "   Visibility = clamp(Visibility, 0.0, 1.0);\n"
@@ -51,25 +100,21 @@ const char* fragmentShaderSource = "#version 330 core\n"
     "void main()\n"
     "{\n"
     "   vec4 texColor = texture(texture1, TexCoord);\n"
-    
     "   float ambientStrength = 0.2;\n"
     "   vec3 ambient = ambientStrength * vec3(1.0);\n"
-    
     "   vec3 norm = normalize(Normal);\n"
     "   vec3 lightDirNorm = normalize(-lightDir);\n"
     "   float diff = max(dot(norm, lightDirNorm), 0.0);\n"
     "   vec3 diffuse = diff * vec3(1.0) * lightIntensity;\n"
-    
     "   vec3 result = (ambient + diffuse) * texColor.rgb;\n"
-    
     "   vec3 fogColor = vec3(0.5f, 0.6f, 0.7f);\n" 
     "   FragColor = vec4(mix(fogColor, result, Visibility), texColor.a);\n" 
     "}\n\0";
 
-// kamera beállítások 
-glm::vec3 cameraPos   = glm::vec3(0.0f, 1.0f,  4.0f);
-glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-glm::vec3 cameraUp    = glm::vec3(0.0f, 1.0f,  0.0f);
+// kamera
+vec3 cameraPos   = {0.0f, 1.0f,  4.0f};
+vec3 cameraFront = {0.0f, 0.0f, -1.0f};
+vec3 cameraUp    = {0.0f, 1.0f,  0.0f};
 
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
@@ -85,7 +130,7 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    SDL_Window* window = SDL_CreateWindow("Sziget Projekt", 
+    SDL_Window* window = SDL_CreateWindow("Sziget Projekt - Tiszta C", 
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
 
     SDL_GLContext glContext = SDL_GL_CreateContext(window);
@@ -110,28 +155,27 @@ int main(int argc, char* argv[]) {
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
+    // piramis
     float pyramidVertices[] = { 
-        // pozíció           // UV        // normál
-        // alap
         -0.5f, 0.0f, -0.5f,  0.0f, 0.0f,  0.0f, -1.0f, 0.0f, 
          0.5f, 0.0f, -0.5f,  1.0f, 0.0f,  0.0f, -1.0f, 0.0f,  
          0.5f, 0.0f,  0.5f,  1.0f, 1.0f,  0.0f, -1.0f, 0.0f, 
          0.5f, 0.0f,  0.5f,  1.0f, 1.0f,  0.0f, -1.0f, 0.0f,  
         -0.5f, 0.0f,  0.5f,  0.0f, 1.0f,  0.0f, -1.0f, 0.0f,  
         -0.5f, 0.0f, -0.5f,  0.0f, 0.0f,  0.0f, -1.0f, 0.0f, 
-        // elülső lap
+        
         -0.5f, 0.0f,  0.5f,  0.0f, 0.0f,  0.0f, 0.447f, 0.894f,  
          0.5f, 0.0f,  0.5f,  1.0f, 0.0f,  0.0f, 0.447f, 0.894f,  
          0.0f, 1.0f,  0.0f,  0.5f, 1.0f,  0.0f, 0.447f, 0.894f,  
-        // hátsó lap
+        
          0.5f, 0.0f, -0.5f,  0.0f, 0.0f,  0.0f, 0.447f, -0.894f,
         -0.5f, 0.0f, -0.5f,  1.0f, 0.0f,  0.0f, 0.447f, -0.894f,
          0.0f, 1.0f,  0.0f,  0.5f, 1.0f,  0.0f, 0.447f, -0.894f,
-        // bal lap
+        
         -0.5f, 0.0f, -0.5f,  0.0f, 0.0f, -0.894f, 0.447f, 0.0f,
         -0.5f, 0.0f,  0.5f,  1.0f, 0.0f, -0.894f, 0.447f, 0.0f,
          0.0f, 1.0f,  0.0f,  0.5f, 1.0f, -0.894f, 0.447f, 0.0f,
-        // jobb lap
+        
          0.5f, 0.0f,  0.5f,  0.0f, 0.0f,  0.894f, 0.447f, 0.0f,
          0.5f, 0.0f, -0.5f,  1.0f, 0.0f,  0.894f, 0.447f, 0.0f, 
          0.0f, 1.0f,  0.0f,  0.5f, 1.0f,  0.894f, 0.447f, 0.0f 
@@ -150,6 +194,7 @@ int main(int argc, char* argv[]) {
     glEnableVertexAttribArray(2);
 
 
+    // talaj
     float groundVertices[] = {
         -20.0f, 0.0f, -20.0f,    0.0f, 10.0f,    0.0f, 1.0f, 0.0f, 
          20.0f, 0.0f, -20.0f,   10.0f, 10.0f,    0.0f, 1.0f, 0.0f,
@@ -171,11 +216,12 @@ int main(int argc, char* argv[]) {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
+
+    // textúrák
     stbi_set_flip_vertically_on_load(true);
     int width, height, nrChannels;
     unsigned int texPyramid, texGround;
 
-    // Piramis textúra
     glGenTextures(1, &texPyramid);
     glBindTexture(GL_TEXTURE_2D, texPyramid);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);   
@@ -186,7 +232,7 @@ int main(int argc, char* argv[]) {
     if (data1) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data1);
         glGenerateMipmap(GL_TEXTURE_2D);
-    } else { std::cout << "Hiba a piramis textura betoltesekor!" << std::endl; }
+    } else { printf("Hiba a piramis textura betoltesekor!\n"); }
     stbi_image_free(data1); 
     
     glGenTextures(1, &texGround);
@@ -199,14 +245,12 @@ int main(int argc, char* argv[]) {
     if (data2) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data2);
         glGenerateMipmap(GL_TEXTURE_2D);
-    } else { std::cout << "Hiba a talaj textura betoltesekor!" << std::endl; }
+    } else { printf("Hiba a talaj textura betoltesekor!\n"); }
     stbi_image_free(data2);
 
     int modelLoc = glGetUniformLocation(shaderProgram, "model");
     int viewLoc  = glGetUniformLocation(shaderProgram, "view");
     int projLoc  = glGetUniformLocation(shaderProgram, "projection");
-    
-
     int lightDirLoc = glGetUniformLocation(shaderProgram, "lightDir");
     int lightIntLoc = glGetUniformLocation(shaderProgram, "lightIntensity");
 
@@ -231,11 +275,11 @@ int main(int argc, char* argv[]) {
                 if (pitch > 89.0f)  pitch = 89.0f;
                 if (pitch < -89.0f) pitch = -89.0f;
 
-                glm::vec3 front;
-                front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-                front.y = sin(glm::radians(pitch));
-                front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-                cameraFront = glm::normalize(front);
+                vec3 front;
+                front.x = cos(radians(yaw)) * cos(radians(pitch));
+                front.y = sin(radians(pitch));
+                front.z = sin(radians(yaw)) * cos(radians(pitch));
+                cameraFront = vec3_normalize(front);
             }
         }
 
@@ -243,15 +287,15 @@ int main(int argc, char* argv[]) {
         float cameraSpeed = 2.5f * deltaTime;
         
         // mozgás
-        if (state[SDL_SCANCODE_W]) cameraPos += cameraSpeed * cameraFront;
-        if (state[SDL_SCANCODE_S]) cameraPos -= cameraSpeed * cameraFront;
-        if (state[SDL_SCANCODE_A]) cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-        if (state[SDL_SCANCODE_D]) cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+        if (state[SDL_SCANCODE_W]) cameraPos = vec3_add(cameraPos, vec3_scale(cameraFront, cameraSpeed));
+        if (state[SDL_SCANCODE_S]) cameraPos = vec3_sub(cameraPos, vec3_scale(cameraFront, cameraSpeed));
+        if (state[SDL_SCANCODE_A]) cameraPos = vec3_sub(cameraPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
+        if (state[SDL_SCANCODE_D]) cameraPos = vec3_add(cameraPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
+        
         if (state[SDL_SCANCODE_ESCAPE]) running = 0; 
         
         if (state[SDL_SCANCODE_KP_PLUS]  || state[SDL_SCANCODE_EQUALS]) lightIntensity += 1.0f * deltaTime;
         if (state[SDL_SCANCODE_KP_MINUS] || state[SDL_SCANCODE_MINUS])  lightIntensity -= 1.0f * deltaTime;
-        
         if (lightIntensity > 1.5f) lightIntensity = 1.5f;
         if (lightIntensity < 0.0f) lightIntensity = 0.0f;
 
@@ -259,29 +303,32 @@ int main(int argc, char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(shaderProgram);
         
-        // fények
         glUniform3f(lightDirLoc, -0.5f, -1.0f, -0.3f); 
         glUniform1f(lightIntLoc, lightIntensity);
         
-        glm::mat4 projection = glm::perspective(glm::radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f);
-        glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-        glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        float projection[16];
+        mat4_perspective(radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f, projection);
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, projection);
 
-        //talaj
+        float view[16];
+        mat4_lookAt(cameraPos, vec3_add(cameraPos, cameraFront), cameraUp, view);
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, view);
+
+        // talaj
         glBindTexture(GL_TEXTURE_2D, texGround);
         glBindVertexArray(groundVAO);
-        glm::mat4 modelGround = glm::mat4(1.0f);
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(modelGround));
+        float modelGround[16];
+        mat4_identity(modelGround);
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelGround);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        //piramis
+        // piramis
         glBindTexture(GL_TEXTURE_2D, texPyramid);
         glBindVertexArray(pyramidVAO);
-        glm::mat4 modelPyramid = glm::mat4(1.0f);
-        modelPyramid = glm::rotate(modelPyramid, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(modelPyramid));
+        float modelPyramid[16];
+        mat4_rotateY(modelPyramid, radians(45.0f));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelPyramid);
         glDrawArrays(GL_TRIANGLES, 0, 18);
 
         SDL_GL_SwapWindow(window);

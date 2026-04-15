@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(Beadando)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_C_STANDARD 99)
 
 #header
 include_directories(external/include)
@@ -10,7 +10,7 @@ include_directories(external/include)
 link_directories(external/lib)
 
 #source
-add_executable(Beadando src/main.cpp src/glad.c)
+add_executable(Beadando src/main.c src/glad.c)
 
 #link
 target_link_libraries(Beadando mingw32 SDL2main SDL2 opengl32)
