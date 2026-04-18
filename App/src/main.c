@@ -129,7 +129,6 @@ unsigned int loadCubemap(char* faces[]) {
     return textureID;
 }
 
-// normál shader (föld, piramis)
 const char* vertexShaderSource = "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
     "layout (location = 1) in vec2 aTexCoord;\n" 
@@ -147,7 +146,6 @@ const char* vertexShaderSource = "#version 330 core\n"
     "   vec4 posRelativeToCam = view * worldPos;\n"
     "   gl_Position = projection * posRelativeToCam;\n"
     "   TexCoord = aTexCoord;\n"
-    // erosebb kod (0.02 -> 0.06)
     "   float distance = length(posRelativeToCam.xyz);\n"
     "   Visibility = exp(-pow((distance * 0.06), 2.0));\n" 
     "   Visibility = clamp(Visibility, 0.0, 1.0);\n"
@@ -175,13 +173,12 @@ const char* fragmentShaderSource = "#version 330 core\n"
     "   FragColor = vec4(mix(fogColor, result, Visibility), texColor.a);\n" 
     "}\n\0";
 
-// viz shader (uj!)
 const char* waterVertexShader = "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
     "layout (location = 1) in vec2 aTexCoord;\n" 
     "layout (location = 2) in vec3 aNormal;\n"
-    "out vec2 TexCoord1;\n" // 1. reteg uv
-    "out vec2 TexCoord2;\n" // 2. reteg uv
+    "out vec2 TexCoord1;\n"
+    "out vec2 TexCoord2;\n"
     "out vec3 Normal;\n" 
     "out float Visibility;\n" 
     "uniform mat4 model;\n"
@@ -190,18 +187,15 @@ const char* waterVertexShader = "#version 330 core\n"
     "uniform float time;\n"
     "void main()\n"
     "{\n"
-    // egyszeru fel-le mozgas az egesz vizszintnek
     "   float wave = sin(time) * 0.1;\n"
     "   vec4 worldPos = model * vec4(aPos.x, aPos.y + wave, aPos.z, 1.0);\n"
     "   Normal = mat3(transpose(inverse(model))) * aNormal;\n"
     "   vec4 posRelativeToCam = view * worldPos;\n"
     "   gl_Position = projection * posRelativeToCam;\n"
     
-    // a ket texturaretetg ellentetes iranyba es sebesseggel mozog
     "   TexCoord1 = aTexCoord + vec2(time * 0.02, time * 0.02);\n"
     "   TexCoord2 = aTexCoord + vec2(-time * 0.01, -time * 0.03);\n"
     
-    // eros kod (0.06)
     "   float distance = length(posRelativeToCam.xyz);\n"
     "   Visibility = exp(-pow((distance * 0.01), 2.0));\n" 
     "   Visibility = clamp(Visibility, 0.0, 1.0);\n"
@@ -213,15 +207,13 @@ const char* waterFragmentShader = "#version 330 core\n"
     "in vec2 TexCoord2;\n"
     "in vec3 Normal;\n"
     "in float Visibility;\n"
-    "uniform sampler2D texture1;\n" // ugyanaz a viz textura
+    "uniform sampler2D texture1;\n"
     "uniform vec3 lightDir;\n"
     "uniform float lightIntensity;\n"
     "void main()\n"
     "{\n"
-    // beolvassuk mindket elcsusztatott uv-t
     "   vec4 texColor1 = texture(texture1, TexCoord1);\n"
     "   vec4 texColor2 = texture(texture1, TexCoord2);\n"
-    // 50-50 szazalekban osszemossuk a ket viz reteget
     "   vec4 finalTexColor = mix(texColor1, texColor2, 0.5);\n"
     
     "   float ambientStrength = 0.4;\n"
@@ -235,11 +227,9 @@ const char* waterFragmentShader = "#version 330 core\n"
     "   vec3 result = (ambient + diffuse) * finalTexColor.rgb * waterTint;\n"
     "   vec3 fogColor = vec3(0.5f, 0.6f, 0.7f);\n" 
     
-    // atlasszosag beallitasa (0.85 alpha)
     "   FragColor = vec4(mix(fogColor, result, Visibility), 0.85);\n" 
     "}\n\0";
 
-// skybox shader
 const char* skyboxVertexShader = "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
     "out vec3 TexCoords;\n"
@@ -287,11 +277,9 @@ int main(int argc, char* argv[]) {
     SDL_SetRelativeMouseMode(SDL_TRUE); 
     glEnable(GL_DEPTH_TEST);
     
-    // atlasszosag engedelyezese
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // alap program
     unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertexShaderSource, NULL); glCompileShader(vertexShader);
     unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -299,7 +287,6 @@ int main(int argc, char* argv[]) {
     unsigned int shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader); glAttachShader(shaderProgram, fragmentShader); glLinkProgram(shaderProgram);
 
-    // viz program
     unsigned int wVShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(wVShader, 1, &waterVertexShader, NULL); glCompileShader(wVShader);
     unsigned int wFShader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -307,7 +294,6 @@ int main(int argc, char* argv[]) {
     unsigned int waterProgram = glCreateProgram();
     glAttachShader(waterProgram, wVShader); glAttachShader(waterProgram, wFShader); glLinkProgram(waterProgram);
 
-    // skybox program
     unsigned int sbVertex = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(sbVertex, 1, &skyboxVertexShader, NULL); glCompileShader(sbVertex);
     unsigned int sbFragment = glCreateShader(GL_FRAGMENT_SHADER);
@@ -315,7 +301,6 @@ int main(int argc, char* argv[]) {
     unsigned int skyboxProgram = glCreateProgram();
     glAttachShader(skyboxProgram, sbVertex); glAttachShader(skyboxProgram, sbFragment); glLinkProgram(skyboxProgram);
 
-    // obj (ellenorizd, hogy 'piramid.obj' vagy 'pyramid.obj' van a mappaban!)
     int objVertexCount = 0;
     float* objVertices = loadOBJ("models/piramid.obj", &objVertexCount);
     unsigned int objVBO, objVAO;
@@ -331,7 +316,7 @@ int main(int argc, char* argv[]) {
         free(objVertices);
     }
 
-    // talaj (kisebb lett: 5x5 a sziget)
+    // talaj
     float groundVertices[] = {
         -5.0f, 0.0f, -5.0f,    0.0f, 5.0f,    0.0f, 1.0f, 0.0f, 
          5.0f, 0.0f, -5.0f,    5.0f, 5.0f,    0.0f, 1.0f, 0.0f,
@@ -348,7 +333,7 @@ int main(int argc, char* argv[]) {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float))); glEnableVertexAttribArray(2);
 
-    // viz (hatalmas: 50x50, es lejjebb van: y = -0.6f hogy ne logjon at a szigeten)
+    // viz
     float waterVertices[] = {
         -50.0f, -0.11f, -50.0f,   0.0f, 25.0f,   0.0f, 1.0f, 0.0f, 
          50.0f, -0.11f, -50.0f,  25.0f, 25.0f,   0.0f, 1.0f, 0.0f,
@@ -411,7 +396,6 @@ int main(int argc, char* argv[]) {
     unsigned char *data2 = stbi_load("textures/ground.jpg", &width, &height, &nrChannels, 0);
     if (data2) { glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data2); glGenerateMipmap(GL_TEXTURE_2D); } stbi_image_free(data2);
 
-    // uj viz textura betoltese
     glGenTextures(1, &texWater); glBindTexture(GL_TEXTURE_2D, texWater);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -482,7 +466,6 @@ int main(int argc, char* argv[]) {
         float view[16];
         mat4_lookAt(cameraPos, vec3_add(cameraPos, cameraFront), cameraUp, view);
 
-        // 1. rajzolas: fold es targyak
         glUseProgram(shaderProgram);
         glUniform3f(lightDirLoc, -0.5f, -1.0f, -0.3f); 
         glUniform1f(lightIntLoc, lightIntensity);
@@ -505,7 +488,6 @@ int main(int argc, char* argv[]) {
             glDrawArrays(GL_TRIANGLES, 0, objVertexCount);
         }
 
-        // 2. rajzolas: viz (a targyak utan rajzoljuk az atlasszosag miatt)
         glUseProgram(waterProgram);
         glUniform3f(wLightDirLoc, -0.5f, -1.0f, -0.3f); 
         glUniform1f(wLightIntLoc, lightIntensity);
@@ -520,7 +502,6 @@ int main(int argc, char* argv[]) {
         glUniformMatrix4fv(wModelLoc, 1, GL_FALSE, modelWater);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        // 3. rajzolas: skybox
         glDepthFunc(GL_LEQUAL); 
         glUseProgram(skyboxProgram);
         glUniformMatrix4fv(sbViewLoc, 1, GL_FALSE, view);
