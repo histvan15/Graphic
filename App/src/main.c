@@ -58,6 +58,50 @@ void mat4_lookAt(vec3 eye, vec3 center, vec3 up, float m[16]) {
     m[14] =  vec3_dot(f, eye);
 }
 
+char* loadShaderSource(const char* filePath) {
+    FILE* file = fopen(filePath, "rb");
+    if (!file) {
+        printf("Hiba: Nem talalhato a shader fajl: %s\n", filePath);
+        return NULL;
+    }
+    fseek(file, 0, SEEK_END);
+    long length = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    char* buffer = (char*)malloc(length + 1);
+    fread(buffer, 1, length, file);
+    buffer[length] = '\0';
+    
+    fclose(file);
+    return buffer;
+}
+
+unsigned int createProgram(const char* vertexPath, const char* fragmentPath) {
+    char* vSrc = loadShaderSource(vertexPath);
+    char* fSrc = loadShaderSource(fragmentPath);
+    if (!vSrc || !fSrc) return 0;
+
+    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, (const char**)&vSrc, NULL);
+    glCompileShader(vertexShader);
+
+    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, (const char**)&fSrc, NULL);
+    glCompileShader(fragmentShader);
+
+    unsigned int program = glCreateProgram();
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
+
+    free(vSrc);
+    free(fSrc);
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    return program;
+}
+
 float* loadOBJ(const char* path, int* out_vertexCount) {
     FILE* file = fopen(path, "r");
     if (!file) {
@@ -83,10 +127,7 @@ float* loadOBJ(const char* path, int* out_vertexCount) {
         } else if (strcmp(lineHeader, "f") == 0) {
             int v[3], vt[3], vn[3];
             int matches = fscanf(file, "%d/%d/%d %d/%d/%d %d/%d/%d\n", &v[0], &vt[0], &vn[0], &v[1], &vt[1], &vn[1], &v[2], &vt[2], &vn[2]);
-            if (matches != 9) {
-                printf("Hiba: %s formatuma nem jo!\n", path);
-                break;
-            }
+            if (matches != 9) { printf("Hiba: %s formatuma nem jo!\n", path); break; }
             for (int i = 0; i < 3; i++) {
                 out_data[out_cnt*8 + 0] = temp_vertices[v[i]-1].x;
                 out_data[out_cnt*8 + 1] = temp_vertices[v[i]-1].y;
@@ -110,16 +151,13 @@ unsigned int loadCubemap(char* faces[]) {
     unsigned int textureID;
     glGenTextures(1, &textureID);
     glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
-    
     int width, height, nrChannels;
     for (unsigned int i = 0; i < 6; i++) {
         unsigned char *data = stbi_load(faces[i], &width, &height, &nrChannels, 3);
         if (data) {
             glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
             stbi_image_free(data);
-        } else {
-            printf("Hiba a Skybox textura betoltesekor: %s\n", faces[i]);
-        }
+        } else { printf("Hiba a Skybox textura betoltesekor: %s\n", faces[i]); }
     }
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -128,128 +166,6 @@ unsigned int loadCubemap(char* faces[]) {
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
     return textureID;
 }
-
-const char* vertexShaderSource = "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "layout (location = 1) in vec2 aTexCoord;\n" 
-    "layout (location = 2) in vec3 aNormal;\n"
-    "out vec2 TexCoord;\n" 
-    "out vec3 Normal;\n" 
-    "out float Visibility;\n" 
-    "uniform mat4 model;\n"
-    "uniform mat4 view;\n"
-    "uniform mat4 projection;\n"
-    "void main()\n"
-    "{\n"
-    "   vec4 worldPos = model * vec4(aPos, 1.0);\n"
-    "   Normal = mat3(transpose(inverse(model))) * aNormal;\n"
-    "   vec4 posRelativeToCam = view * worldPos;\n"
-    "   gl_Position = projection * posRelativeToCam;\n"
-    "   TexCoord = aTexCoord;\n"
-    "   float distance = length(posRelativeToCam.xyz);\n"
-    "   Visibility = exp(-pow((distance * 0.06), 2.0));\n" 
-    "   Visibility = clamp(Visibility, 0.0, 1.0);\n"
-    "}\0";
-
-const char* fragmentShaderSource = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "in vec2 TexCoord;\n"
-    "in vec3 Normal;\n"
-    "in float Visibility;\n"
-    "uniform sampler2D texture1;\n"
-    "uniform vec3 lightDir;\n"
-    "uniform float lightIntensity;\n"
-    "void main()\n"
-    "{\n"
-    "   vec4 texColor = texture(texture1, TexCoord);\n"
-    "   float ambientStrength = 0.2;\n"
-    "   vec3 ambient = ambientStrength * vec3(1.0);\n"
-    "   vec3 norm = normalize(Normal);\n"
-    "   vec3 lightDirNorm = normalize(-lightDir);\n"
-    "   float diff = max(dot(norm, lightDirNorm), 0.0);\n"
-    "   vec3 diffuse = diff * vec3(1.0) * lightIntensity;\n"
-    "   vec3 result = (ambient + diffuse) * texColor.rgb;\n"
-    "   vec3 fogColor = vec3(0.5f, 0.6f, 0.7f);\n" 
-    "   FragColor = vec4(mix(fogColor, result, Visibility), texColor.a);\n" 
-    "}\n\0";
-
-const char* waterVertexShader = "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "layout (location = 1) in vec2 aTexCoord;\n" 
-    "layout (location = 2) in vec3 aNormal;\n"
-    "out vec2 TexCoord1;\n"
-    "out vec2 TexCoord2;\n"
-    "out vec3 Normal;\n" 
-    "out float Visibility;\n" 
-    "uniform mat4 model;\n"
-    "uniform mat4 view;\n"
-    "uniform mat4 projection;\n"
-    "uniform float time;\n"
-    "void main()\n"
-    "{\n"
-    "   float wave = sin(time) * 0.1;\n"
-    "   vec4 worldPos = model * vec4(aPos.x, aPos.y + wave, aPos.z, 1.0);\n"
-    "   Normal = mat3(transpose(inverse(model))) * aNormal;\n"
-    "   vec4 posRelativeToCam = view * worldPos;\n"
-    "   gl_Position = projection * posRelativeToCam;\n"
-    
-    "   TexCoord1 = aTexCoord + vec2(time * 0.02, time * 0.02);\n"
-    "   TexCoord2 = aTexCoord + vec2(-time * 0.01, -time * 0.03);\n"
-    
-    "   float distance = length(posRelativeToCam.xyz);\n"
-    "   Visibility = exp(-pow((distance * 0.01), 2.0));\n" 
-    "   Visibility = clamp(Visibility, 0.0, 1.0);\n"
-    "}\0";
-
-const char* waterFragmentShader = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "in vec2 TexCoord1;\n"
-    "in vec2 TexCoord2;\n"
-    "in vec3 Normal;\n"
-    "in float Visibility;\n"
-    "uniform sampler2D texture1;\n"
-    "uniform vec3 lightDir;\n"
-    "uniform float lightIntensity;\n"
-    "void main()\n"
-    "{\n"
-    "   vec4 texColor1 = texture(texture1, TexCoord1);\n"
-    "   vec4 texColor2 = texture(texture1, TexCoord2);\n"
-    "   vec4 finalTexColor = mix(texColor1, texColor2, 0.5);\n"
-    
-    "   float ambientStrength = 0.4;\n"
-    "   vec3 ambient = ambientStrength * vec3(1.0);\n"
-    "   vec3 norm = normalize(Normal);\n"
-    "   vec3 lightDirNorm = normalize(-lightDir);\n"
-    "   float diff = max(dot(norm, lightDirNorm), 0.0);\n"
-    "   vec3 diffuse = diff * vec3(1.0) * lightIntensity;\n"
-    
-    "   vec3 waterTint = vec3(0.2, 0.5, 0.8);\n"
-    "   vec3 result = (ambient + diffuse) * finalTexColor.rgb * waterTint;\n"
-    "   vec3 fogColor = vec3(0.5f, 0.6f, 0.7f);\n" 
-    
-    "   FragColor = vec4(mix(fogColor, result, Visibility), 0.85);\n" 
-    "}\n\0";
-
-const char* skyboxVertexShader = "#version 330 core\n"
-    "layout (location = 0) in vec3 aPos;\n"
-    "out vec3 TexCoords;\n"
-    "uniform mat4 projection;\n"
-    "uniform mat4 view;\n"
-    "void main()\n"
-    "{\n"
-    "    TexCoords = aPos;\n"
-    "    vec4 pos = projection * mat4(mat3(view)) * vec4(aPos, 1.0);\n"
-    "    gl_Position = pos.xyww;\n" 
-    "}\0";
-
-const char* skyboxFragmentShader = "#version 330 core\n"
-    "out vec4 FragColor;\n"
-    "in vec3 TexCoords;\n"
-    "uniform samplerCube skybox;\n"
-    "void main()\n"
-    "{\n"
-    "    FragColor = texture(skybox, TexCoords);\n"
-    "}\0";
 
 vec3 cameraPos   = {0.0f, 1.0f,  4.0f};
 vec3 cameraFront = {0.0f, 0.0f, -1.0f};
@@ -277,30 +193,15 @@ int main(int argc, char* argv[]) {
     SDL_SetRelativeMouseMode(SDL_TRUE); 
     glEnable(GL_DEPTH_TEST);
     
+    // blending
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL); glCompileShader(vertexShader);
-    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL); glCompileShader(fragmentShader);
-    unsigned int shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader); glAttachShader(shaderProgram, fragmentShader); glLinkProgram(shaderProgram);
+    unsigned int shaderProgram = createProgram("shaders/main.vert", "shaders/main.frag");
+    unsigned int waterProgram  = createProgram("shaders/water.vert", "shaders/water.frag");
+    unsigned int skyboxProgram = createProgram("shaders/skybox.vert", "shaders/skybox.frag");
 
-    unsigned int wVShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(wVShader, 1, &waterVertexShader, NULL); glCompileShader(wVShader);
-    unsigned int wFShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(wFShader, 1, &waterFragmentShader, NULL); glCompileShader(wFShader);
-    unsigned int waterProgram = glCreateProgram();
-    glAttachShader(waterProgram, wVShader); glAttachShader(waterProgram, wFShader); glLinkProgram(waterProgram);
-
-    unsigned int sbVertex = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(sbVertex, 1, &skyboxVertexShader, NULL); glCompileShader(sbVertex);
-    unsigned int sbFragment = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(sbFragment, 1, &skyboxFragmentShader, NULL); glCompileShader(sbFragment);
-    unsigned int skyboxProgram = glCreateProgram();
-    glAttachShader(skyboxProgram, sbVertex); glAttachShader(skyboxProgram, sbFragment); glLinkProgram(skyboxProgram);
-
+    // obj 
     int objVertexCount = 0;
     float* objVertices = loadOBJ("models/piramid.obj", &objVertexCount);
     unsigned int objVBO, objVAO;
@@ -316,7 +217,7 @@ int main(int argc, char* argv[]) {
         free(objVertices);
     }
 
-    // talaj
+    // ground
     float groundVertices[] = {
         -5.0f, 0.0f, -5.0f,    0.0f, 5.0f,    0.0f, 1.0f, 0.0f, 
          5.0f, 0.0f, -5.0f,    5.0f, 5.0f,    0.0f, 1.0f, 0.0f,
@@ -333,7 +234,7 @@ int main(int argc, char* argv[]) {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float))); glEnableVertexAttribArray(2);
 
-    // viz
+    // water
     float waterVertices[] = {
         -50.0f, -0.11f, -50.0f,   0.0f, 25.0f,   0.0f, 1.0f, 0.0f, 
          50.0f, -0.11f, -50.0f,  25.0f, 25.0f,   0.0f, 1.0f, 0.0f,
@@ -371,7 +272,6 @@ int main(int argc, char* argv[]) {
     glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0); glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
-    // texturak
     stbi_set_flip_vertically_on_load(false); 
     char* faces[] = {
         "textures/skybox/right.png", "textures/skybox/left.png",
@@ -447,12 +347,15 @@ int main(int argc, char* argv[]) {
 
         const Uint8* state = SDL_GetKeyboardState(NULL);
         float cameraSpeed = 2.5f * deltaTime;
+
+        // movement
         if (state[SDL_SCANCODE_W]) cameraPos = vec3_add(cameraPos, vec3_scale(cameraFront, cameraSpeed));
         if (state[SDL_SCANCODE_S]) cameraPos = vec3_sub(cameraPos, vec3_scale(cameraFront, cameraSpeed));
         if (state[SDL_SCANCODE_A]) cameraPos = vec3_sub(cameraPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
         if (state[SDL_SCANCODE_D]) cameraPos = vec3_add(cameraPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
         if (state[SDL_SCANCODE_ESCAPE]) running = 0; 
         
+        // lights
         if (state[SDL_SCANCODE_KP_PLUS]  || state[SDL_SCANCODE_EQUALS]) lightIntensity += 1.0f * deltaTime;
         if (state[SDL_SCANCODE_KP_MINUS] || state[SDL_SCANCODE_MINUS])  lightIntensity -= 1.0f * deltaTime;
         if (lightIntensity > 1.5f) lightIntensity = 1.5f;
@@ -466,6 +369,7 @@ int main(int argc, char* argv[]) {
         float view[16];
         mat4_lookAt(cameraPos, vec3_add(cameraPos, cameraFront), cameraUp, view);
 
+        // ground + obj
         glUseProgram(shaderProgram);
         glUniform3f(lightDirLoc, -0.5f, -1.0f, -0.3f); 
         glUniform1f(lightIntLoc, lightIntensity);
@@ -488,6 +392,7 @@ int main(int argc, char* argv[]) {
             glDrawArrays(GL_TRIANGLES, 0, objVertexCount);
         }
 
+        // water
         glUseProgram(waterProgram);
         glUniform3f(wLightDirLoc, -0.5f, -1.0f, -0.3f); 
         glUniform1f(wLightIntLoc, lightIntensity);
@@ -502,6 +407,7 @@ int main(int argc, char* argv[]) {
         glUniformMatrix4fv(wModelLoc, 1, GL_FALSE, modelWater);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
+        // skybox
         glDepthFunc(GL_LEQUAL); 
         glUseProgram(skyboxProgram);
         glUniformMatrix4fv(sbViewLoc, 1, GL_FALSE, view);

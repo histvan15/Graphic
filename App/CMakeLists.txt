@@ -18,3 +18,4 @@ target_link_libraries(Beadando mingw32 SDL2main SDL2 opengl32)
 
 file(COPY textures DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY models DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY shaders DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
