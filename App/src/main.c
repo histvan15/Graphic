@@ -2,6 +2,8 @@
 #include <glad/glad.h>
 #include <SDL2/SDL.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include <stdbool.h>
 
@@ -13,6 +15,7 @@
 #endif
 
 
+typedef struct { float x, y; } vec2;
 typedef struct { float x, y, z; } vec3;
 
 vec3 vec3_add(vec3 a, vec3 b) { return (vec3){a.x + b.x, a.y + b.y, a.z + b.z}; }
@@ -56,12 +59,83 @@ void mat4_lookAt(vec3 eye, vec3 center, vec3 up, float m[16]) {
     m[14] =  vec3_dot(f, eye);
 }
 
-void mat4_rotateY(float m[16], float angle) {
-    mat4_identity(m);
-    float c = cos(angle);
-    float s = sin(angle);
-    m[0] = c;  m[8] = s;
-    m[2] = -s; m[10] = c;
+float* loadOBJ(const char* path, int* out_vertexCount) {
+    FILE* file = fopen(path, "r");
+    if (!file) {
+        printf("Hiba: Nem talalhato a modell fajl: %s\n", path);
+        *out_vertexCount = 0;
+        return NULL;
+    }
+
+    vec3* temp_vertices = (vec3*)malloc(10000 * sizeof(vec3));
+    vec2* temp_uvs = (vec2*)malloc(10000 * sizeof(vec2));
+    vec3* temp_normals = (vec3*)malloc(10000 * sizeof(vec3));
+
+    int v_cnt = 0, vt_cnt = 0, vn_cnt = 0;
+    int max_out = 30000;
+    float* out_data = (float*)malloc(max_out * 8 * sizeof(float));
+    int out_cnt = 0;
+
+    char lineHeader[128];
+    while (fscanf(file, "%127s", lineHeader) != EOF) {
+        if (strcmp(lineHeader, "v") == 0) {
+            fscanf(file, "%f %f %f\n", &temp_vertices[v_cnt].x, &temp_vertices[v_cnt].y, &temp_vertices[v_cnt].z);
+            v_cnt++;
+        } else if (strcmp(lineHeader, "vt") == 0) {
+            fscanf(file, "%f %f\n", &temp_uvs[vt_cnt].x, &temp_uvs[vt_cnt].y);
+            vt_cnt++;
+        } else if (strcmp(lineHeader, "vn") == 0) {
+            fscanf(file, "%f %f %f\n", &temp_normals[vn_cnt].x, &temp_normals[vn_cnt].y, &temp_normals[vn_cnt].z);
+            vn_cnt++;
+        } else if (strcmp(lineHeader, "f") == 0) {
+            int v[3], vt[3], vn[3];
+            int matches = fscanf(file, "%d/%d/%d %d/%d/%d %d/%d/%d\n", &v[0], &vt[0], &vn[0], &v[1], &vt[1], &vn[1], &v[2], &vt[2], &vn[2]);
+            if (matches != 9) {
+                printf("Hiba: %s formatuma nem jo (Csak UV-vel es Normallal ellatott OBJ a jo)!\n", path);
+                break;
+            }
+            for (int i = 0; i < 3; i++) {
+                out_data[out_cnt*8 + 0] = temp_vertices[v[i]-1].x;
+                out_data[out_cnt*8 + 1] = temp_vertices[v[i]-1].y;
+                out_data[out_cnt*8 + 2] = temp_vertices[v[i]-1].z;
+                out_data[out_cnt*8 + 3] = temp_uvs[vt[i]-1].x;
+                out_data[out_cnt*8 + 4] = temp_uvs[vt[i]-1].y;
+                out_data[out_cnt*8 + 5] = temp_normals[vn[i]-1].x;
+                out_data[out_cnt*8 + 6] = temp_normals[vn[i]-1].y;
+                out_data[out_cnt*8 + 7] = temp_normals[vn[i]-1].z;
+                out_cnt++;
+            }
+        }
+    }
+    *out_vertexCount = out_cnt;
+    free(temp_vertices); free(temp_uvs); free(temp_normals);
+    fclose(file);
+    return out_data;
+}
+
+unsigned int loadCubemap(char* faces[]) {
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+    
+    int width, height, nrChannels;
+    for (unsigned int i = 0; i < 6; i++) {
+        unsigned char *data = stbi_load(faces[i], &width, &height, &nrChannels, 3);
+        
+        if (data) {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            stbi_image_free(data);
+        } else {
+            printf("Hiba a Skybox textura betoltesekor: %s\n", faces[i]);
+        }
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    
+    return textureID;
 }
 
 const char* vertexShaderSource = "#version 330 core\n"
@@ -111,11 +185,30 @@ const char* fragmentShaderSource = "#version 330 core\n"
     "   FragColor = vec4(mix(fogColor, result, Visibility), texColor.a);\n" 
     "}\n\0";
 
-// kamera
+const char* skyboxVertexShader = "#version 330 core\n"
+    "layout (location = 0) in vec3 aPos;\n"
+    "out vec3 TexCoords;\n"
+    "uniform mat4 projection;\n"
+    "uniform mat4 view;\n"
+    "void main()\n"
+    "{\n"
+    "    TexCoords = aPos;\n"
+    "    vec4 pos = projection * mat4(mat3(view)) * vec4(aPos, 1.0);\n"
+    "    gl_Position = pos.xyww;\n" 
+    "}\0";
+
+const char* skyboxFragmentShader = "#version 330 core\n"
+    "out vec4 FragColor;\n"
+    "in vec3 TexCoords;\n"
+    "uniform samplerCube skybox;\n"
+    "void main()\n"
+    "{\n"
+    "    FragColor = texture(skybox, TexCoords);\n"
+    "}\0";
+
 vec3 cameraPos   = {0.0f, 1.0f,  4.0f};
 vec3 cameraFront = {0.0f, 0.0f, -1.0f};
 vec3 cameraUp    = {0.0f, 1.0f,  0.0f};
-
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 float yaw   = -90.0f;
@@ -130,7 +223,7 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    SDL_Window* window = SDL_CreateWindow("Sziget Projekt - Tiszta C", 
+    SDL_Window* window = SDL_CreateWindow("Sziget Projekt", 
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
 
     SDL_GLContext glContext = SDL_GL_CreateContext(window);
@@ -152,47 +245,37 @@ int main(int argc, char* argv[]) {
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
 
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
+    unsigned int sbVertex = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(sbVertex, 1, &skyboxVertexShader, NULL);
+    glCompileShader(sbVertex);
+    unsigned int sbFragment = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(sbFragment, 1, &skyboxFragmentShader, NULL);
+    glCompileShader(sbFragment);
+    unsigned int skyboxProgram = glCreateProgram();
+    glAttachShader(skyboxProgram, sbVertex);
+    glAttachShader(skyboxProgram, sbFragment);
+    glLinkProgram(skyboxProgram);
 
-    // piramis
-    float pyramidVertices[] = { 
-        -0.5f, 0.0f, -0.5f,  0.0f, 0.0f,  0.0f, -1.0f, 0.0f, 
-         0.5f, 0.0f, -0.5f,  1.0f, 0.0f,  0.0f, -1.0f, 0.0f,  
-         0.5f, 0.0f,  0.5f,  1.0f, 1.0f,  0.0f, -1.0f, 0.0f, 
-         0.5f, 0.0f,  0.5f,  1.0f, 1.0f,  0.0f, -1.0f, 0.0f,  
-        -0.5f, 0.0f,  0.5f,  0.0f, 1.0f,  0.0f, -1.0f, 0.0f,  
-        -0.5f, 0.0f, -0.5f,  0.0f, 0.0f,  0.0f, -1.0f, 0.0f, 
+    //obj 
+    int objVertexCount = 0;
+    float* objVertices = loadOBJ("models/piramid.obj", &objVertexCount);
+    
+    unsigned int objVBO, objVAO;
+    if (objVertices != NULL) {
+        glGenVertexArrays(1, &objVAO);
+        glGenBuffers(1, &objVBO);
+        glBindVertexArray(objVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, objVBO);
+        glBufferData(GL_ARRAY_BUFFER, objVertexCount * 8 * sizeof(float), objVertices, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
+        glEnableVertexAttribArray(2);
         
-        -0.5f, 0.0f,  0.5f,  0.0f, 0.0f,  0.0f, 0.447f, 0.894f,  
-         0.5f, 0.0f,  0.5f,  1.0f, 0.0f,  0.0f, 0.447f, 0.894f,  
-         0.0f, 1.0f,  0.0f,  0.5f, 1.0f,  0.0f, 0.447f, 0.894f,  
-        
-         0.5f, 0.0f, -0.5f,  0.0f, 0.0f,  0.0f, 0.447f, -0.894f,
-        -0.5f, 0.0f, -0.5f,  1.0f, 0.0f,  0.0f, 0.447f, -0.894f,
-         0.0f, 1.0f,  0.0f,  0.5f, 1.0f,  0.0f, 0.447f, -0.894f,
-        
-        -0.5f, 0.0f, -0.5f,  0.0f, 0.0f, -0.894f, 0.447f, 0.0f,
-        -0.5f, 0.0f,  0.5f,  1.0f, 0.0f, -0.894f, 0.447f, 0.0f,
-         0.0f, 1.0f,  0.0f,  0.5f, 1.0f, -0.894f, 0.447f, 0.0f,
-        
-         0.5f, 0.0f,  0.5f,  0.0f, 0.0f,  0.894f, 0.447f, 0.0f,
-         0.5f, 0.0f, -0.5f,  1.0f, 0.0f,  0.894f, 0.447f, 0.0f, 
-         0.0f, 1.0f,  0.0f,  0.5f, 1.0f,  0.894f, 0.447f, 0.0f 
-    };
-    unsigned int pyramidVBO, pyramidVAO;
-    glGenVertexArrays(1, &pyramidVAO);
-    glGenBuffers(1, &pyramidVBO);
-    glBindVertexArray(pyramidVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, pyramidVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(pyramidVertices), pyramidVertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
-    glEnableVertexAttribArray(2);
-
+        free(objVertices);
+    }
 
     // talaj
     float groundVertices[] = {
@@ -216,8 +299,37 @@ int main(int argc, char* argv[]) {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
+    float skyboxVertices[] = {
+        -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f
+    };
+    unsigned int skyboxVAO, skyboxVBO;
+    glGenVertexArrays(1, &skyboxVAO);
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
-    // textúrák
+    stbi_set_flip_vertically_on_load(false); 
+    char* faces[] = {
+        "textures/skybox/right.png", "textures/skybox/left.png",
+        "textures/skybox/top.png", "textures/skybox/bottom.png",
+        "textures/skybox/front.png", "textures/skybox/back.png"
+    };
+    unsigned int cubemapTexture = loadCubemap(faces);
+
     stbi_set_flip_vertically_on_load(true);
     int width, height, nrChannels;
     unsigned int texPyramid, texGround;
@@ -232,7 +344,7 @@ int main(int argc, char* argv[]) {
     if (data1) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data1);
         glGenerateMipmap(GL_TEXTURE_2D);
-    } else { printf("Hiba a piramis textura betoltesekor!\n"); }
+    }
     stbi_image_free(data1); 
     
     glGenTextures(1, &texGround);
@@ -245,7 +357,7 @@ int main(int argc, char* argv[]) {
     if (data2) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data2);
         glGenerateMipmap(GL_TEXTURE_2D);
-    } else { printf("Hiba a talaj textura betoltesekor!\n"); }
+    }
     stbi_image_free(data2);
 
     int modelLoc = glGetUniformLocation(shaderProgram, "model");
@@ -254,6 +366,11 @@ int main(int argc, char* argv[]) {
     int lightDirLoc = glGetUniformLocation(shaderProgram, "lightDir");
     int lightIntLoc = glGetUniformLocation(shaderProgram, "lightIntensity");
 
+    int sbViewLoc = glGetUniformLocation(skyboxProgram, "view");
+    int sbProjLoc = glGetUniformLocation(skyboxProgram, "projection");
+
+    glUseProgram(skyboxProgram);
+    glUniform1i(glGetUniformLocation(skyboxProgram, "skybox"), 0);
 
     int running = 1;
     SDL_Event event;
@@ -285,13 +402,13 @@ int main(int argc, char* argv[]) {
 
         const Uint8* state = SDL_GetKeyboardState(NULL);
         float cameraSpeed = 2.5f * deltaTime;
-        
+
         // mozgás
         if (state[SDL_SCANCODE_W]) cameraPos = vec3_add(cameraPos, vec3_scale(cameraFront, cameraSpeed));
         if (state[SDL_SCANCODE_S]) cameraPos = vec3_sub(cameraPos, vec3_scale(cameraFront, cameraSpeed));
         if (state[SDL_SCANCODE_A]) cameraPos = vec3_sub(cameraPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
         if (state[SDL_SCANCODE_D]) cameraPos = vec3_add(cameraPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
-        
+
         if (state[SDL_SCANCODE_ESCAPE]) running = 0; 
         
         if (state[SDL_SCANCODE_KP_PLUS]  || state[SDL_SCANCODE_EQUALS]) lightIntensity += 1.0f * deltaTime;
@@ -301,18 +418,16 @@ int main(int argc, char* argv[]) {
 
         glClearColor(0.5f, 0.6f, 0.7f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glUseProgram(shaderProgram);
         
-        glUniform3f(lightDirLoc, -0.5f, -1.0f, -0.3f); 
-        glUniform1f(lightIntLoc, lightIntensity);
-        
-
         float projection[16];
         mat4_perspective(radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f, projection);
-        glUniformMatrix4fv(projLoc, 1, GL_FALSE, projection);
-
         float view[16];
         mat4_lookAt(cameraPos, vec3_add(cameraPos, cameraFront), cameraUp, view);
+
+        glUseProgram(shaderProgram);
+        glUniform3f(lightDirLoc, -0.5f, -1.0f, -0.3f); 
+        glUniform1f(lightIntLoc, lightIntensity);
+        glUniformMatrix4fv(projLoc, 1, GL_FALSE, projection);
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, view);
 
         // talaj
@@ -323,22 +438,30 @@ int main(int argc, char* argv[]) {
         glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelGround);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        // piramis
-        glBindTexture(GL_TEXTURE_2D, texPyramid);
-        glBindVertexArray(pyramidVAO);
-        float modelPyramid[16];
-        mat4_rotateY(modelPyramid, radians(45.0f));
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelPyramid);
-        glDrawArrays(GL_TRIANGLES, 0, 18);
+        if (objVertexCount > 0) {
+            glBindTexture(GL_TEXTURE_2D, texPyramid);
+            glBindVertexArray(objVAO);
+            float modelPyramid[16];
+            mat4_identity(modelPyramid);
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelPyramid);
+            glDrawArrays(GL_TRIANGLES, 0, objVertexCount);
+        }
+
+        // skybox
+        glDepthFunc(GL_LEQUAL); 
+        glUseProgram(skyboxProgram);
+        glUniformMatrix4fv(sbViewLoc, 1, GL_FALSE, view);
+        glUniformMatrix4fv(sbProjLoc, 1, GL_FALSE, projection);
+        glBindVertexArray(skyboxVAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
+        glDepthFunc(GL_LESS);
 
         SDL_GL_SwapWindow(window);
     }
 
-    glDeleteVertexArrays(1, &pyramidVAO);
-    glDeleteBuffers(1, &pyramidVBO);
-    glDeleteVertexArrays(1, &groundVAO);
-    glDeleteBuffers(1, &groundVBO);
-    glDeleteProgram(shaderProgram);
     SDL_GL_DeleteContext(glContext);
     SDL_DestroyWindow(window);
     SDL_Quit();
