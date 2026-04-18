@@ -15,8 +15,8 @@ uniform float time;
 
 void main()
 {
-    float wave = sin(time) * 0.1;
-    vec4 worldPos = model * vec4(aPos.x, aPos.y + wave, aPos.z, 1.0);
+    float tide = sin(time * 0.5) * 0.05;
+    vec4 worldPos = model * vec4(aPos.x, aPos.y + tide, aPos.z, 1.0);
     
     Normal = mat3(transpose(inverse(model))) * aNormal;
     vec4 posRelativeToCam = view * worldPos;
