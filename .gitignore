@@ -22,3 +22,7 @@ Thumbs.db
 build/
 bin/
 obj/
+
+external/SDL2/
+external/lib/
+external/include/SDL2/
