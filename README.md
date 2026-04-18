@@ -28,4 +28,10 @@ Ez a program egy interaktív, 3D-s virtuális tér, amely egy elhagyatott sziget
   **Environment mapping:** Skybox
   
   **Térkép kezelés**
+
+  ## Dependencies
+
+  **SDL2**
+  **GLAD**
+  **stb_image**
   
