@@ -7,11 +7,11 @@ Ez a program egy interaktív, 3D-s virtuális tér, amely egy elhagyatott sziget
 
   **Kamerakezelés:** WASD mozgás egérrel való nézelődés
   
-  **Objektumok:**
+  **Objektumok:** Térbeli objektumokat .obj fájlokból töltöm be
   
-  **Animációk:** tenger hullámzása
+  **Animációk:** Tenger hullámzása ami körbeöleli a szigetet
   
-  **Textúrák**
+  **Textúrák** 
   
   **Fények:** Lesz egy Nap aminek a fényét + és - állíthatjuk
   
@@ -19,19 +19,21 @@ Ez a program egy interaktív, 3D-s virtuális tér, amely egy elhagyatott sziget
 
 ## Extra feladatok
 
-  **Köd**
+  **Köd** Távolság alapon erősödik és a tárgyak beleolvadnak a háttérbe
   
-  **Fizika:** Animált víz
+  **Fizika:** Kettős csúsztatással és szinusz hullámokkal generált víz 
   
-  **Ütközés vizsgálat**
+  **Ütközés vizsgálat:** A piramison való keresztül sétálást fogom blokkolni
   
-  **Environment mapping:** Skybox
+  **Environment mapping:** Skybox öleli körbe az egész területet
   
-  **Térkép kezelés**
+  **Térkép kezelés** 
 
   ## Dependencies
 
   **SDL2**
+  
   **GLAD**
+  
   **stb_image**
   
