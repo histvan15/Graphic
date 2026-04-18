@@ -23,6 +23,8 @@ build/
 bin/
 obj/
 
-external/SDL2/
-external/lib/
-external/include/SDL2/
+**/external/SDL2/
+**/external/lib/
+**/external/include/SDL2/
+**/external/include/glm/
+**/external/include/GLFW/
