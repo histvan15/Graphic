@@ -349,12 +349,25 @@ int main(int argc, char* argv[]) {
         float cameraSpeed = 2.5f * deltaTime;
 
         // movement
-        if (state[SDL_SCANCODE_W]) cameraPos = vec3_add(cameraPos, vec3_scale(cameraFront, cameraSpeed));
-        if (state[SDL_SCANCODE_S]) cameraPos = vec3_sub(cameraPos, vec3_scale(cameraFront, cameraSpeed));
-        if (state[SDL_SCANCODE_A]) cameraPos = vec3_sub(cameraPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
-        if (state[SDL_SCANCODE_D]) cameraPos = vec3_add(cameraPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
-        if (state[SDL_SCANCODE_ESCAPE]) running = 0; 
+        vec3 nextPos = cameraPos;
         
+        if (state[SDL_SCANCODE_W]) nextPos = vec3_add(nextPos, vec3_scale(cameraFront, cameraSpeed));
+        if (state[SDL_SCANCODE_S]) nextPos = vec3_sub(nextPos, vec3_scale(cameraFront, cameraSpeed));
+        if (state[SDL_SCANCODE_A]) nextPos = vec3_sub(nextPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
+        if (state[SDL_SCANCODE_D]) nextPos = vec3_add(nextPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
+
+        if (state[SDL_SCANCODE_ESCAPE]) running = 0;
+
+        float minX = -0.6f; float maxX = 0.6f;
+        float minZ = -0.6f; float maxZ = 0.6f;
+
+        bool collisionX = (nextPos.x > minX && nextPos.x < maxX && cameraPos.z > minZ && cameraPos.z < maxZ);
+        bool collisionZ = (cameraPos.x > minX && cameraPos.x < maxX && nextPos.z > minZ && nextPos.z < maxZ);
+
+        if (!collisionX) cameraPos.x = nextPos.x;
+        if (!collisionZ) cameraPos.z = nextPos.z;
+        cameraPos.y = nextPos.y;
+
         // lights
         if (state[SDL_SCANCODE_KP_PLUS]  || state[SDL_SCANCODE_EQUALS]) lightIntensity += 1.0f * deltaTime;
         if (state[SDL_SCANCODE_KP_MINUS] || state[SDL_SCANCODE_MINUS])  lightIntensity -= 1.0f * deltaTime;
