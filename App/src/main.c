@@ -434,7 +434,7 @@ int main(int argc, char* argv[]) {
 
         // ground + obj
         glUseProgram(shaderProgram);
-        glUniform3f(lightDirLoc, -0.5f, -1.0f, -0.3f); 
+        glUniform3f(lightDirLoc, -0.5f, -1.0f, 1.0f); 
         glUniform1f(lightIntLoc, lightIntensity);
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, projection);
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, view);
@@ -450,7 +450,7 @@ int main(int argc, char* argv[]) {
 
         // water
         glUseProgram(waterProgram);
-        glUniform3f(wLightDirLoc, -0.5f, -1.0f, -0.3f); 
+        glUniform3f(wLightDirLoc, -0.5f, -1.0f, 1.0f); 
         glUniform1f(wLightIntLoc, lightIntensity);
         glUniformMatrix4fv(wProjLoc, 1, GL_FALSE, projection);
         glUniformMatrix4fv(wViewLoc, 1, GL_FALSE, view);
