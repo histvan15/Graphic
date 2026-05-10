@@ -115,7 +115,7 @@ float* loadOBJ(const char* path, int* out_vertexCount) {
     int v_cnt = 0, vt_cnt = 0, vn_cnt = 0;
     int max_out = 30000;
     float* out_data = (float*)malloc(max_out * 8 * sizeof(float));
-    int out_cnt = 0;
+    int out_count = 0;
     char lineHeader[128];
     while (fscanf(file, "%127s", lineHeader) != EOF) {
         if (strcmp(lineHeader, "v") == 0) {
@@ -129,19 +129,19 @@ float* loadOBJ(const char* path, int* out_vertexCount) {
             int matches = fscanf(file, "%d/%d/%d %d/%d/%d %d/%d/%d\n", &v[0], &vt[0], &vn[0], &v[1], &vt[1], &vn[1], &v[2], &vt[2], &vn[2]);
             if (matches != 9) { printf("Hiba: %s formatuma nem jo!\n", path); break; }
             for (int i = 0; i < 3; i++) {
-                out_data[out_cnt*8 + 0] = temp_vertices[v[i]-1].x;
-                out_data[out_cnt*8 + 1] = temp_vertices[v[i]-1].y;
-                out_data[out_cnt*8 + 2] = temp_vertices[v[i]-1].z;
-                out_data[out_cnt*8 + 3] = temp_uvs[vt[i]-1].x;
-                out_data[out_cnt*8 + 4] = temp_uvs[vt[i]-1].y;
-                out_data[out_cnt*8 + 5] = temp_normals[vn[i]-1].x;
-                out_data[out_cnt*8 + 6] = temp_normals[vn[i]-1].y;
-                out_data[out_cnt*8 + 7] = temp_normals[vn[i]-1].z;
-                out_cnt++;
+                out_data[out_count*8 + 0] = temp_vertices[v[i]-1].x;
+                out_data[out_count*8 + 1] = temp_vertices[v[i]-1].y;
+                out_data[out_count*8 + 2] = temp_vertices[v[i]-1].z;
+                out_data[out_count*8 + 3] = temp_uvs[vt[i]-1].x;
+                out_data[out_count*8 + 4] = temp_uvs[vt[i]-1].y;
+                out_data[out_count*8 + 5] = temp_normals[vn[i]-1].x;
+                out_data[out_count*8 + 6] = temp_normals[vn[i]-1].y;
+                out_data[out_count*8 + 7] = temp_normals[vn[i]-1].z;
+                out_count++;
             }
         }
     }
-    *out_vertexCount = out_cnt;
+    *out_vertexCount = out_count;
     free(temp_vertices); free(temp_uvs); free(temp_normals);
     fclose(file);
     return out_data;
