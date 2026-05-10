@@ -167,6 +167,49 @@ unsigned int loadCubemap(char* faces[]) {
     return textureID;
 }
 
+unsigned int loadTexture(const char* path) {
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load(path, &width, &height, &nrChannels, 0);
+    if (data) {
+        GLenum format = (nrChannels == 4) ? GL_RGBA : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else {
+        printf("Hiba: Nem sikerult betolteni a texturat: %s\n", path);
+    }
+    stbi_image_free(data);
+    return textureID;
+}
+
+void setupMesh(float* vertices, size_t size, unsigned int* vao, unsigned int* vbo) {
+    glGenVertexArrays(1, vao);
+    glGenBuffers(1, vbo);
+    
+    glBindVertexArray(*vao);
+    glBindBuffer(GL_ARRAY_BUFFER, *vbo);
+    glBufferData(GL_ARRAY_BUFFER, size, vertices, GL_STATIC_DRAW);
+    
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    
+    glBindVertexArray(0);
+}
+
 vec3 cameraPos   = {0.0f, 1.0f,  4.0f};
 vec3 cameraFront = {0.0f, 0.0f, -1.0f};
 vec3 cameraUp    = {0.0f, 1.0f,  0.0f};
@@ -175,6 +218,33 @@ float lastFrame = 0.0f;
 float yaw   = -90.0f;
 float pitch = -10.0f; 
 float lightIntensity = 1.0f;
+
+void updateCamera(const Uint8* state, float deltaTime) {
+    float cameraSpeed = 2.5f * deltaTime;
+    vec3 nextPos = cameraPos;
+    
+    if (state[SDL_SCANCODE_W]) nextPos = vec3_add(nextPos, vec3_scale(cameraFront, cameraSpeed));
+    if (state[SDL_SCANCODE_S]) nextPos = vec3_sub(nextPos, vec3_scale(cameraFront, cameraSpeed));
+    if (state[SDL_SCANCODE_A]) nextPos = vec3_sub(nextPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
+    if (state[SDL_SCANCODE_D]) nextPos = vec3_add(nextPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
+
+    float minX = -0.6f, maxX = 0.6f;
+    float minZ = -0.6f, maxZ = 0.6f;
+
+    bool collisionX = (nextPos.x > minX && nextPos.x < maxX && cameraPos.z > minZ && cameraPos.z < maxZ);
+    bool collisionZ = (cameraPos.x > minX && cameraPos.x < maxX && nextPos.z > minZ && nextPos.z < maxZ);
+
+    if (!collisionX) cameraPos.x = nextPos.x;
+    if (!collisionZ) cameraPos.z = nextPos.z;
+    cameraPos.y = nextPos.y;
+}
+
+void drawMesh(unsigned int vao, unsigned int texture, int vertexCount, int modelLoc, float* modelMatrix) {
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glBindVertexArray(vao);
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelMatrix);
+    glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+}
 
 int main(int argc, char* argv[]) {
     SDL_SetMainReady();
@@ -200,20 +270,14 @@ int main(int argc, char* argv[]) {
     unsigned int shaderProgram = createProgram("shaders/main.vert", "shaders/main.frag");
     unsigned int waterProgram  = createProgram("shaders/water.vert", "shaders/water.frag");
     unsigned int skyboxProgram = createProgram("shaders/skybox.vert", "shaders/skybox.frag");
+    unsigned int uiProgram     = createProgram("shaders/ui.vert", "shaders/ui.frag");
 
     // obj 
     int objVertexCount = 0;
     float* objVertices = loadOBJ("models/piramid.obj", &objVertexCount);
     unsigned int objVBO, objVAO;
     if (objVertices != NULL) {
-        glGenVertexArrays(1, &objVAO);
-        glGenBuffers(1, &objVBO);
-        glBindVertexArray(objVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, objVBO);
-        glBufferData(GL_ARRAY_BUFFER, objVertexCount * 8 * sizeof(float), objVertices, GL_STATIC_DRAW);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0); glEnableVertexAttribArray(0);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
-        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float))); glEnableVertexAttribArray(2);
+        setupMesh(objVertices, objVertexCount * 8 * sizeof(float), &objVAO, &objVBO);
         free(objVertices);
     }
 
@@ -227,12 +291,7 @@ int main(int argc, char* argv[]) {
         -5.0f, 0.0f, -5.0f,    0.0f, 5.0f,    0.0f, 1.0f, 0.0f
     };
     unsigned int groundVBO, groundVAO;
-    glGenVertexArrays(1, &groundVAO); glGenBuffers(1, &groundVBO);
-    glBindVertexArray(groundVAO); glBindBuffer(GL_ARRAY_BUFFER, groundVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(groundVertices), groundVertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0); glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float))); glEnableVertexAttribArray(2);
+    setupMesh(groundVertices, sizeof(groundVertices), &groundVAO, &groundVBO);
 
     // water
     float waterVertices[] = {
@@ -244,12 +303,7 @@ int main(int argc, char* argv[]) {
         -50.0f, -0.05f, -50.0f,   0.0f, 25.0f,   0.0f, 1.0f, 0.0f
     };
     unsigned int waterVBO, waterVAO;
-    glGenVertexArrays(1, &waterVAO); glGenBuffers(1, &waterVBO);
-    glBindVertexArray(waterVAO); glBindBuffer(GL_ARRAY_BUFFER, waterVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(waterVertices), waterVertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0); glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float))); glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float))); glEnableVertexAttribArray(2);
+    setupMesh(waterVertices, sizeof(waterVertices), &waterVAO, &waterVBO);
 
     // skybox
     float skyboxVertices[] = {
@@ -272,6 +326,23 @@ int main(int argc, char* argv[]) {
     glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0); glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
+    // ui
+    float uiVertices[] = {
+        -0.6f,  0.6f,        0.0f, 1.0f,
+        -0.6f, -0.6f,        0.0f, 0.0f,
+         0.6f, -0.6f,        1.0f, 0.0f,
+        -0.6f,  0.6f,        0.0f, 1.0f,
+         0.6f, -0.6f,        1.0f, 0.0f,
+         0.6f,  0.6f,        1.0f, 1.0f
+    };
+
+    unsigned int uiVAO, uiVBO;
+    glGenVertexArrays(1, &uiVAO); glGenBuffers(1, &uiVBO);
+    glBindVertexArray(uiVAO); glBindBuffer(GL_ARRAY_BUFFER, uiVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(uiVertices), uiVertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0); glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float))); glEnableVertexAttribArray(1);
+
     stbi_set_flip_vertically_on_load(false); 
     char* faces[] = {
         "textures/skybox/right.png", "textures/skybox/left.png",
@@ -281,26 +352,11 @@ int main(int argc, char* argv[]) {
     unsigned int cubemapTexture = loadCubemap(faces);
 
     stbi_set_flip_vertically_on_load(true);
-    int width, height, nrChannels;
-    unsigned int texPyramid, texGround, texWater;
 
-    glGenTextures(1, &texPyramid); glBindTexture(GL_TEXTURE_2D, texPyramid);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    unsigned char *data1 = stbi_load("textures/piramid.jpg", &width, &height, &nrChannels, 0);
-    if (data1) { glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data1); glGenerateMipmap(GL_TEXTURE_2D); } stbi_image_free(data1); 
-    
-    glGenTextures(1, &texGround); glBindTexture(GL_TEXTURE_2D, texGround);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    unsigned char *data2 = stbi_load("textures/ground.jpg", &width, &height, &nrChannels, 0);
-    if (data2) { glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data2); glGenerateMipmap(GL_TEXTURE_2D); } stbi_image_free(data2);
-
-    glGenTextures(1, &texWater); glBindTexture(GL_TEXTURE_2D, texWater);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    unsigned char *data3 = stbi_load("textures/water.jpg", &width, &height, &nrChannels, 0);
-    if (data3) { glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data3); glGenerateMipmap(GL_TEXTURE_2D); } stbi_image_free(data3);
+    unsigned int texPyramid = loadTexture("textures/piramid.jpg"); 
+    unsigned int texGround = loadTexture("textures/ground.jpg"); 
+    unsigned int texWater = loadTexture("textures/water.jpg");
+    unsigned int texSugo = loadTexture("textures/sugo.png");
 
     int modelLoc = glGetUniformLocation(shaderProgram, "model");
     int viewLoc  = glGetUniformLocation(shaderProgram, "view");
@@ -323,6 +379,9 @@ int main(int argc, char* argv[]) {
 
     int running = 1;
     SDL_Event event;
+
+    bool showSugo = false;
+
     while (running) {
         float currentFrame = SDL_GetTicks() / 1000.0f;
         deltaTime = currentFrame - lastFrame;
@@ -330,6 +389,14 @@ int main(int argc, char* argv[]) {
 
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) running = 0;
+
+            // sugo toggle F1
+            if (event.type == SDL_KEYDOWN) {
+                if (event.key.keysym.sym == SDLK_F1) {
+                    showSugo = !showSugo;
+                }
+            }
+
             if (event.type == SDL_MOUSEMOTION) {
                 float xoffset = event.motion.xrel * 0.1f;
                 float yoffset = -event.motion.yrel * 0.1f;
@@ -346,28 +413,11 @@ int main(int argc, char* argv[]) {
         }
 
         const Uint8* state = SDL_GetKeyboardState(NULL);
-        float cameraSpeed = 2.5f * deltaTime;
 
         // movement
-        vec3 nextPos = cameraPos;
+        updateCamera(state, deltaTime);
+        if(state[SDL_SCANCODE_ESCAPE]) running = 0;
         
-        if (state[SDL_SCANCODE_W]) nextPos = vec3_add(nextPos, vec3_scale(cameraFront, cameraSpeed));
-        if (state[SDL_SCANCODE_S]) nextPos = vec3_sub(nextPos, vec3_scale(cameraFront, cameraSpeed));
-        if (state[SDL_SCANCODE_A]) nextPos = vec3_sub(nextPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
-        if (state[SDL_SCANCODE_D]) nextPos = vec3_add(nextPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
-
-        if (state[SDL_SCANCODE_ESCAPE]) running = 0;
-
-        float minX = -0.6f; float maxX = 0.6f;
-        float minZ = -0.6f; float maxZ = 0.6f;
-
-        bool collisionX = (nextPos.x > minX && nextPos.x < maxX && cameraPos.z > minZ && cameraPos.z < maxZ);
-        bool collisionZ = (cameraPos.x > minX && cameraPos.x < maxX && nextPos.z > minZ && nextPos.z < maxZ);
-
-        if (!collisionX) cameraPos.x = nextPos.x;
-        if (!collisionZ) cameraPos.z = nextPos.z;
-        cameraPos.y = nextPos.y;
-
         // lights
         if (state[SDL_SCANCODE_KP_PLUS]  || state[SDL_SCANCODE_EQUALS]) lightIntensity += 1.0f * deltaTime;
         if (state[SDL_SCANCODE_KP_MINUS] || state[SDL_SCANCODE_MINUS])  lightIntensity -= 1.0f * deltaTime;
@@ -389,20 +439,13 @@ int main(int argc, char* argv[]) {
         glUniformMatrix4fv(projLoc, 1, GL_FALSE, projection);
         glUniformMatrix4fv(viewLoc, 1, GL_FALSE, view);
 
-        glBindTexture(GL_TEXTURE_2D, texGround);
-        glBindVertexArray(groundVAO);
-        float modelGround[16];
-        mat4_identity(modelGround);
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelGround);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        float modelMatrix[16];
+        mat4_identity(modelMatrix);
+        drawMesh(groundVAO, texGround, 6, modelLoc, modelMatrix);
 
         if (objVertexCount > 0) {
-            glBindTexture(GL_TEXTURE_2D, texPyramid);
-            glBindVertexArray(objVAO);
-            float modelPyramid[16];
-            mat4_identity(modelPyramid);
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelPyramid);
-            glDrawArrays(GL_TRIANGLES, 0, objVertexCount);
+            mat4_identity(modelMatrix);
+            drawMesh(objVAO, texPyramid, objVertexCount, modelLoc, modelMatrix);
         }
 
         // water
@@ -413,12 +456,8 @@ int main(int argc, char* argv[]) {
         glUniformMatrix4fv(wViewLoc, 1, GL_FALSE, view);
         glUniform1f(wTimeLoc, currentFrame); 
 
-        glBindTexture(GL_TEXTURE_2D, texWater);
-        glBindVertexArray(waterVAO);
-        float modelWater[16];
-        mat4_identity(modelWater);
-        glUniformMatrix4fv(wModelLoc, 1, GL_FALSE, modelWater);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+        mat4_identity(modelMatrix);
+        drawMesh(waterVAO, texWater, 6 , wModelLoc, modelMatrix);
 
         // skybox
         glDepthFunc(GL_LEQUAL); 
@@ -431,6 +470,19 @@ int main(int argc, char* argv[]) {
         glDrawArrays(GL_TRIANGLES, 0, 36);
         glBindVertexArray(0);
         glDepthFunc(GL_LESS);
+
+        if (showSugo) {
+            glDisable(GL_DEPTH_TEST);
+            glUseProgram(uiProgram);
+            
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texSugo);
+            
+            glBindVertexArray(uiVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            
+            glEnable(GL_DEPTH_TEST);
+        }
 
         SDL_GL_SwapWindow(window);
     }
