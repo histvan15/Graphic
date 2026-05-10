@@ -267,14 +267,14 @@ int main(int argc, char* argv[]) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    unsigned int shaderProgram = createProgram("shaders/main.vert", "shaders/main.frag");
-    unsigned int waterProgram  = createProgram("shaders/water.vert", "shaders/water.frag");
-    unsigned int skyboxProgram = createProgram("shaders/skybox.vert", "shaders/skybox.frag");
-    unsigned int uiProgram     = createProgram("shaders/ui.vert", "shaders/ui.frag");
+    unsigned int shaderProgram = createProgram("assets/shaders/main.vert", "assets/shaders/main.frag");
+    unsigned int waterProgram  = createProgram("assets/shaders/water.vert", "assets/shaders/water.frag");
+    unsigned int skyboxProgram = createProgram("assets/shaders/skybox.vert", "assets/shaders/skybox.frag");
+    unsigned int uiProgram     = createProgram("assets/shaders/ui.vert", "assets/shaders/ui.frag");
 
     // obj 
     int objVertexCount = 0;
-    float* objVertices = loadOBJ("models/piramid.obj", &objVertexCount);
+    float* objVertices = loadOBJ("assets/models/piramid.obj", &objVertexCount);
     unsigned int objVBO, objVAO;
     if (objVertices != NULL) {
         setupMesh(objVertices, objVertexCount * 8 * sizeof(float), &objVAO, &objVBO);
@@ -345,18 +345,18 @@ int main(int argc, char* argv[]) {
 
     stbi_set_flip_vertically_on_load(false); 
     char* faces[] = {
-        "textures/skybox/right.png", "textures/skybox/left.png",
-        "textures/skybox/top.png", "textures/skybox/bottom.png",
-        "textures/skybox/front.png", "textures/skybox/back.png"
+        "assets/textures/skybox/right.png", "assets/textures/skybox/left.png",
+        "assets/textures/skybox/top.png", "assets/textures/skybox/bottom.png",
+        "assets/textures/skybox/front.png", "assets/textures/skybox/back.png"
     };
     unsigned int cubemapTexture = loadCubemap(faces);
 
     stbi_set_flip_vertically_on_load(true);
 
-    unsigned int texPyramid = loadTexture("textures/piramid.jpg"); 
-    unsigned int texGround = loadTexture("textures/ground.jpg"); 
-    unsigned int texWater = loadTexture("textures/water.jpg");
-    unsigned int texSugo = loadTexture("textures/sugo.png");
+    unsigned int texPyramid = loadTexture("assets/textures/piramid.jpg"); 
+    unsigned int texGround = loadTexture("assets/textures/ground.jpg"); 
+    unsigned int texWater = loadTexture("assets/textures/water.jpg");
+    unsigned int texSugo = loadTexture("assets/textures/sugo.png");
 
     int modelLoc = glGetUniformLocation(shaderProgram, "model");
     int viewLoc  = glGetUniformLocation(shaderProgram, "view");
