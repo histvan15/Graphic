@@ -19,7 +19,7 @@ void main()
     vec3 norm = normalize(Normal);
     vec3 lightDirNorm = normalize(-lightDir);
     float diff = max(dot(norm, lightDirNorm), 0.0);
-    vec3 diffuse = diff * vec3(1.0) * lightIntensity;
+    vec3 diffuse = diff * vec3(1.0,0.8,0.5) * lightIntensity;
     
     vec3 result = (ambient + diffuse) * texColor.rgb;
     vec3 fogColor = vec3(0.5, 0.6, 0.7);
