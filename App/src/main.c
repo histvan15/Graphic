@@ -321,10 +321,13 @@ int main(int argc, char* argv[]) {
          1.0f, -1.0f, -1.0f, -1.0f, -1.0f,  1.0f,  1.0f, -1.0f,  1.0f
     };
     unsigned int skyboxVAO, skyboxVBO;
-    glGenVertexArrays(1, &skyboxVAO); glGenBuffers(1, &skyboxVBO);
-    glBindVertexArray(skyboxVAO); glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glGenVertexArrays(1, &skyboxVAO); 
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO); 
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0); glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0); 
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
     // ui
     float uiVertices[] = {
@@ -337,11 +340,15 @@ int main(int argc, char* argv[]) {
     };
 
     unsigned int uiVAO, uiVBO;
-    glGenVertexArrays(1, &uiVAO); glGenBuffers(1, &uiVBO);
-    glBindVertexArray(uiVAO); glBindBuffer(GL_ARRAY_BUFFER, uiVBO);
+    glGenVertexArrays(1, &uiVAO); 
+    glGenBuffers(1, &uiVBO);
+    glBindVertexArray(uiVAO); 
+    glBindBuffer(GL_ARRAY_BUFFER, uiVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(uiVertices), uiVertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0); glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float))); glEnableVertexAttribArray(1);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0); 
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float))); 
+    glEnableVertexAttribArray(1);
 
     stbi_set_flip_vertically_on_load(false); 
     char* faces[] = {
