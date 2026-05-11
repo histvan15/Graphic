@@ -6,6 +6,8 @@ in vec2 TexCoord2;
 in vec3 Normal;
 in float Visibility;
 
+in vec4 FragPosView;
+
 uniform sampler2D texture1;
 uniform vec3 lightDir;
 uniform float lightIntensity;
@@ -28,5 +30,9 @@ void main()
     vec3 result = (ambient + diffuse) * finalTexColor.rgb * waterTint;
     vec3 fogColor = vec3(0.5, 0.6, 0.7);
     
+    float distance = length(FragPosView.xyz);
+    float Visibility = exp(-pow((distance * 0.10), 2.0));
+    Visibility = clamp(Visibility, 0.0, 1.0);
+
     FragColor = vec4(mix(fogColor, result, Visibility), 0.85);
 }

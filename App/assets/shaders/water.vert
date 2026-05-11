@@ -8,6 +8,8 @@ out vec2 TexCoord2;
 out vec3 Normal;
 out float Visibility;
 
+out vec4 FragPosView;
+
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
@@ -20,12 +22,10 @@ void main()
     
     Normal = mat3(transpose(inverse(model))) * aNormal;
     vec4 posRelativeToCam = view * worldPos;
+    FragPosView = posRelativeToCam;
     gl_Position = projection * posRelativeToCam;
     
     TexCoord1 = aTexCoord + vec2(time * 0.02, time * 0.02);
     TexCoord2 = aTexCoord + vec2(-time * 0.01, -time * 0.03);
     
-    float distance = length(posRelativeToCam.xyz);
-    Visibility = exp(-pow((distance * 0.01), 2.0));
-    Visibility = clamp(Visibility, 0.0, 1.0);
 }
