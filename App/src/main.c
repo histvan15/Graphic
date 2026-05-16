@@ -7,7 +7,7 @@
 #include <math.h>
 #include <stdbool.h>
 
-
+#include "stb_image.h"
 #include "engine.h"
 
 vec3 cameraPos   = {0.0f, 1.0f,  4.0f};
