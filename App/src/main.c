@@ -10,6 +10,7 @@
 #include "stb_image.h"
 #include "engine.h"
 #include "camera.h"
+#include "window.h"
 
 int main(int argc, char* argv[]) {
     float deltaTime = 0.0f;
@@ -17,25 +18,10 @@ int main(int argc, char* argv[]) {
     float lightIntensity = 1.0f;
     Camera camera = initCamera((vec3){0.0f, 1.0f, 4.0f});
 
-    SDL_SetMainReady();
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) return 1;
-
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-    SDL_Window* window = SDL_CreateWindow("Sziget Projekt", 
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
-
-    SDL_GLContext glContext = SDL_GL_CreateContext(window);
-    if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress)) return 1;
-
-    SDL_SetRelativeMouseMode(SDL_TRUE); 
-    glEnable(GL_DEPTH_TEST);
-    
-    // blending
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    AppWindow appWin;
+    if (!initWindow(&appWin, "3D Beadando", 800, 600)) {
+        return -1;
+    }
 
     unsigned int shaderProgram = createProgram("assets/shaders/main.vert", "assets/shaders/main.frag");
     unsigned int waterProgram  = createProgram("assets/shaders/water.vert", "assets/shaders/water.frag");
@@ -253,12 +239,10 @@ int main(int argc, char* argv[]) {
             glEnable(GL_DEPTH_TEST);
         }
 
-        SDL_GL_SwapWindow(window);
+        SDL_GL_SwapWindow(appWin.handle);
     }
 
-    SDL_GL_DeleteContext(glContext);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    cleanupWindow(&appWin);
 
     return 0;
 }
