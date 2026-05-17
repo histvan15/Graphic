@@ -17,7 +17,7 @@ uniform float time;
 
 void main()
 {
-    float tide = sin(time * 0.5) * 0.05;
+    float tide = sin(time * 0.5) * 0.045;
     vec4 worldPos = model * vec4(aPos.x, aPos.y + tide, aPos.z, 1.0);
     
     Normal = mat3(transpose(inverse(model))) * aNormal;

@@ -9,44 +9,14 @@
 
 #include "stb_image.h"
 #include "engine.h"
-
-vec3 cameraPos   = {0.0f, 1.0f,  4.0f};
-vec3 cameraFront = {0.0f, 0.0f, -1.0f};
-vec3 cameraUp    = {0.0f, 1.0f,  0.0f};
-float deltaTime = 0.0f;
-float lastFrame = 0.0f;
-float yaw   = -90.0f;
-float pitch = -10.0f; 
-float lightIntensity = 1.0f;
-
-void updateCamera(const Uint8* state, float deltaTime) {
-    float cameraSpeed = 2.5f * deltaTime;
-    vec3 nextPos = cameraPos;
-    
-    if (state[SDL_SCANCODE_W]) nextPos = vec3_add(nextPos, vec3_scale(cameraFront, cameraSpeed));
-    if (state[SDL_SCANCODE_S]) nextPos = vec3_sub(nextPos, vec3_scale(cameraFront, cameraSpeed));
-    if (state[SDL_SCANCODE_A]) nextPos = vec3_sub(nextPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
-    if (state[SDL_SCANCODE_D]) nextPos = vec3_add(nextPos, vec3_scale(vec3_normalize(vec3_cross(cameraFront, cameraUp)), cameraSpeed));
-
-    float minX = -0.6f, maxX = 0.6f;
-    float minZ = -0.6f, maxZ = 0.6f;
-
-    bool collisionX = (nextPos.x > minX && nextPos.x < maxX && cameraPos.z > minZ && cameraPos.z < maxZ);
-    bool collisionZ = (cameraPos.x > minX && cameraPos.x < maxX && nextPos.z > minZ && nextPos.z < maxZ);
-
-    if (!collisionX) cameraPos.x = nextPos.x;
-    if (!collisionZ) cameraPos.z = nextPos.z;
-    cameraPos.y = nextPos.y;
-}
-
-void drawMesh(unsigned int vao, unsigned int texture, int vertexCount, int modelLoc, float* modelMatrix) {
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glBindVertexArray(vao);
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelMatrix);
-    glDrawArrays(GL_TRIANGLES, 0, vertexCount);
-}
+#include "camera.h"
 
 int main(int argc, char* argv[]) {
+    float deltaTime = 0.0f;
+    float lastFrame = 0.0f;
+    float lightIntensity = 1.0f;
+    Camera camera = initCamera((vec3){0.0f, 1.0f, 4.0f});
+
     SDL_SetMainReady();
     if (SDL_Init(SDL_INIT_VIDEO) < 0) return 1;
 
@@ -207,22 +177,14 @@ int main(int argc, char* argv[]) {
             if (event.type == SDL_MOUSEMOTION) {
                 float xoffset = event.motion.xrel * 0.1f;
                 float yoffset = -event.motion.yrel * 0.1f;
-                yaw   += xoffset;
-                pitch += yoffset;
-                if (pitch > 89.0f)  pitch = 89.0f;
-                if (pitch < -89.0f) pitch = -89.0f;
-                vec3 front;
-                front.x = cos(radians(yaw)) * cos(radians(pitch));
-                front.y = sin(radians(pitch));
-                front.z = sin(radians(yaw)) * cos(radians(pitch));
-                cameraFront = vec3_normalize(front);
+                processMouseInput(&camera, xoffset, yoffset);
             }
         }
 
         const Uint8* state = SDL_GetKeyboardState(NULL);
 
         // movement
-        updateCamera(state, deltaTime);
+        processKeyboardInput(&camera, state, deltaTime);
         if(state[SDL_SCANCODE_ESCAPE]) running = 0;
         
         // lights
@@ -237,7 +199,7 @@ int main(int argc, char* argv[]) {
         float projection[16];
         mat4_perspective(radians(45.0f), 800.0f / 600.0f, 0.1f, 100.0f, projection);
         float view[16];
-        mat4_lookAt(cameraPos, vec3_add(cameraPos, cameraFront), cameraUp, view);
+        mat4_lookAt(camera.position, vec3_add(camera.position, camera.front), camera.up, view);
 
         // ground + obj
         glUseProgram(shaderProgram);

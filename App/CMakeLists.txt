@@ -10,7 +10,7 @@ include_directories(external/include)
 link_directories(external/lib)
 
 #source
-add_executable(Beadando src/engine.c src/main.c src/glad.c)
+add_executable(Beadando src/engine.c src/main.c src/glad.c src/camera.c)
 
 #link
 target_link_libraries(Beadando mingw32 SDL2main SDL2 opengl32)
