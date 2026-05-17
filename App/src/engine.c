@@ -200,10 +200,3 @@ void setupMesh(float* vertices, size_t size, unsigned int* vao, unsigned int* vb
     
     glBindVertexArray(0);
 }
-
-void drawMesh(unsigned int vao, unsigned int texture, int vertexCount, int modelLoc, float* modelMatrix) {
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glBindVertexArray(vao);
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, modelMatrix);
-    glDrawArrays(GL_TRIANGLES, 0, vertexCount);
-}

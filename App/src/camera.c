@@ -32,13 +32,13 @@ void processKeyboardInput(Camera* cam, const Uint8* state, float deltaTime) {
 }
 
 void processMouseInput(Camera* cam, float xoffset, float yoffset) {
-                cam->yaw += xoffset;
-                cam->pitch += yoffset;
-                if (cam->pitch > 89.0f)  cam->pitch = 89.0f;
-                if (cam->pitch < -89.0f) cam->pitch = -89.0f;
-                vec3 front;
-                front.x = cos(radians(cam->yaw)) * cos(radians(cam->pitch));
-                front.y = sin(radians(cam->pitch));
-                front.z = sin(radians(cam->yaw)) * cos(radians(cam->pitch));
-                cam->front = vec3_normalize(front);
+    cam->yaw += xoffset;
+    cam->pitch += yoffset;
+    if (cam->pitch > 89.0f)  cam->pitch = 89.0f;
+    if (cam->pitch < -89.0f) cam->pitch = -89.0f;
+    vec3 front;
+    front.x = cos(radians(cam->yaw)) * cos(radians(cam->pitch));
+    front.y = sin(radians(cam->pitch));
+    front.z = sin(radians(cam->yaw)) * cos(radians(cam->pitch));
+    cam->front = vec3_normalize(front);
 }
