@@ -1,13 +1,9 @@
 #define SDL_MAIN_HANDLED
-#include <glad/glad.h>
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <math.h>
 #include <stdbool.h>
 
-#include "stb_image.h"
 #include "engine.h"
 #include "camera.h"
 #include "window.h"
